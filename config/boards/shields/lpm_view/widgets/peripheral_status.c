@@ -92,31 +92,6 @@ static void draw_top(lv_obj_t *widget, lv_color_t cbuf[], const struct status_st
     rotate_canvas(canvas, cbuf);
 }
 
-// ================= 初始化 =================
-int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
-    widget->obj = lv_obj_create(parent);
-    lv_obj_set_size(widget->obj, 144, 72);
-
-    k_work_init_delayable(&bongo_idle_work, bongo_idle_handler);
-
-    // --- 顶部 canvas ---
-    lv_obj_t *top = lv_canvas_create(widget->obj);
-    lv_obj_align(top, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    lv_canvas_set_buffer(top, widget->cbuf, CANVAS_SIZE, CANVAS_SIZE, LV_IMG_CF_TRUE_COLOR);
-
-    // --- 打字貓（置中，避開左側狀態直條）---
-    lv_obj_t *art = lv_img_create(widget->obj);
-    lv_img_set_src(art, &bongo_idle);
-    lv_obj_align(art, LV_ALIGN_TOP_LEFT, 22, 10);
-
-    sys_slist_append(&widgets, &widget->node);
-
-    widget_battery_status_init();
-    widget_peripheral_status_init();
-
-    return 0;
-}
-
 // ================= 电池状态 =================
 static void set_battery_status(struct zmk_widget_status *widget,
                                struct battery_status_state state) {
@@ -167,5 +142,30 @@ static void output_status_update_cb(struct peripheral_status_state state) {
 ZMK_DISPLAY_WIDGET_LISTENER(widget_peripheral_status, struct peripheral_status_state,
                             output_status_update_cb, get_state)
 ZMK_SUBSCRIPTION(widget_peripheral_status, zmk_split_peripheral_status_changed);
+
+// ================= 初始化 =================
+int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
+    widget->obj = lv_obj_create(parent);
+    lv_obj_set_size(widget->obj, 144, 72);
+
+    k_work_init_delayable(&bongo_idle_work, bongo_idle_handler);
+
+    // --- 顶部 canvas ---
+    lv_obj_t *top = lv_canvas_create(widget->obj);
+    lv_obj_align(top, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_canvas_set_buffer(top, widget->cbuf, CANVAS_SIZE, CANVAS_SIZE, LV_IMG_CF_TRUE_COLOR);
+
+    // --- 打字貓（置中，避開左側狀態直條）---
+    lv_obj_t *art = lv_img_create(widget->obj);
+    lv_img_set_src(art, &bongo_idle);
+    lv_obj_align(art, LV_ALIGN_TOP_LEFT, 22, 10);
+
+    sys_slist_append(&widgets, &widget->node);
+
+    widget_battery_status_init();
+    widget_peripheral_status_init();
+
+    return 0;
+}
 
 lv_obj_t *zmk_widget_status_obj(struct zmk_widget_status *widget) { return widget->obj; }
