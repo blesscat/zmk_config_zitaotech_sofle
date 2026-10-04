@@ -4,7 +4,6 @@
  */
 
 #include <zephyr/kernel.h>
-#include <zephyr/random/random.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
@@ -14,6 +13,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/events/usb_conn_state_changed.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/battery_state_changed.h>
+#include <zmk/events/position_state_changed.h>
 #include <zmk/split/bluetooth/peripheral.h>
 #include <zmk/events/split_peripheral_status_changed.h>
 #include <zmk/usb.h>
@@ -21,33 +21,54 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #include "peripheral_status.h"
 
-// ==================== 图片声明 ====================
-LV_IMG_DECLARE(cat);
-LV_IMG_DECLARE(astronaut);
-LV_IMG_DECLARE(macintosch);
-LV_IMG_DECLARE(david);
-LV_IMG_DECLARE(vader);
-LV_IMG_DECLARE(blackhole);
-LV_IMG_DECLARE(plane);
-LV_IMG_DECLARE(mounta);
+// ==================== 打字貓圖片 ====================
+// 原圖 50x26 取自 englmaxi/zmk-dongle-display (v0.3) 的 bongo_cat_images.c
+// 2x 放大後左右各裁 14px 成 72x52，再逆時針轉 90° 存成 52x72（直式螢幕用）
+LV_IMG_DECLARE(bongo_idle);
+LV_IMG_DECLARE(bongo_left);
+LV_IMG_DECLARE(bongo_right);
+LV_IMG_DECLARE(paw);
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 
-// ==================== 状态结构体 ====================
+// ==================== 狀態結構體 ====================
 struct peripheral_status_state {
     bool connected;
 };
 
-// ==================== 图片数组 ====================
-static const lv_img_dsc_t *bunny_frames[] = {
-    &cat, &astronaut, &macintosch, &david, &vader, &blackhole, &plane, &mounta,
-};
+// ==================== 打字貓切換控制 ====================
+// 每次右半板按鍵按下就左右掌交替拍一下，停手後 700ms 回到待機幀
+#define BONGO_IDLE_TIMEOUT K_MSEC(700)
 
-#define BUNNY_FRAME_COUNT (sizeof(bunny_frames) / sizeof(bunny_frames[0]))
+static bool bongo_left_paw;
+static struct k_work_delayable bongo_idle_work;
 
-// ==================== 图片切换控制 ====================
-static uint8_t current_img_index = 0;
-static struct k_work_delayable img_switch_work;
+static void bongo_set_frame(const lv_img_dsc_t *frame) {
+    struct zmk_widget_status *widget;
+
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        // art 是第2個 child（0=canvas, 1=img）
+        lv_img_set_src(lv_obj_get_child(widget->obj, 1), frame);
+    }
+}
+
+static void bongo_idle_handler(struct k_work *work) { bongo_set_frame(&bongo_idle); }
+
+static int bongo_keypress_listener(const zmk_event_t *eh) {
+    const struct zmk_position_state_changed *ev = as_zmk_position_state_changed(eh);
+    if (ev == NULL || !ev->state) {
+        return 0;
+    }
+
+    bongo_left_paw = !bongo_left_paw;
+    bongo_set_frame(bongo_left_paw ? &bongo_left : &bongo_right);
+    k_work_reschedule(&bongo_idle_work, BONGO_IDLE_TIMEOUT);
+
+    return 0;
+}
+
+ZMK_LISTENER(widget_bongo, bongo_keypress_listener);
+ZMK_SUBSCRIPTION(widget_bongo, zmk_position_state_changed);
 
 // ================= 顶部绘制 =================
 static void draw_top(lv_obj_t *widget, lv_color_t cbuf[], const struct status_state *state) {
@@ -71,28 +92,6 @@ static void draw_top(lv_obj_t *widget, lv_color_t cbuf[], const struct status_st
 
     // Rotate canvas
     rotate_canvas(canvas, cbuf);
-}
-
-// ================= 图片切换函数 =================
-static void switch_image(struct k_work *work) {
-    struct zmk_widget_status *widget;
-
-    uint8_t new_index;
-
-    do {
-        new_index = sys_rand32_get() % BUNNY_FRAME_COUNT;
-    } while (new_index == current_img_index); // 避免重复
-
-    current_img_index = new_index;
-
-    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
-        // art 是第2个 child（0=canvas, 1=img）
-        lv_obj_t *art = lv_obj_get_child(widget->obj, 1);
-        lv_img_set_src(art, bunny_frames[current_img_index]);
-    }
-
-    // 重新调度 60 秒
-    k_work_schedule(&img_switch_work, K_SECONDS(60));
 }
 
 // ================= 电池状态 =================
@@ -151,30 +150,27 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     widget->obj = lv_obj_create(parent);
     lv_obj_set_size(widget->obj, 144, 72);
 
+    k_work_init_delayable(&bongo_idle_work, bongo_idle_handler);
+
     // --- 顶部 canvas ---
     lv_obj_t *top = lv_canvas_create(widget->obj);
     lv_obj_align(top, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     lv_canvas_set_buffer(top, widget->cbuf, CANVAS_SIZE, CANVAS_SIZE, LV_IMG_CF_TRUE_COLOR);
 
-    // --- 初始随机图片 ---
-    current_img_index = sys_rand32_get() % BUNNY_FRAME_COUNT;
-
+    // --- 打字貓（2x 大圖貼底，左右置中，超出部分已裁切）---
     lv_obj_t *art = lv_img_create(widget->obj);
-    lv_img_set_src(art, bunny_frames[current_img_index]);
-    lv_obj_align(art, LV_ALIGN_TOP_LEFT, 20, 0);
+    lv_img_set_src(art, &bongo_idle);
+    lv_obj_align(art, LV_ALIGN_TOP_LEFT, 92, 0);
+
+    // --- 貓掌印裝飾（滿版寬，置中於狀態列與貓之間）---
+    lv_obj_t *deco = lv_img_create(widget->obj);
+    lv_img_set_src(deco, &paw);
+    lv_obj_align(deco, LV_ALIGN_TOP_LEFT, 23, 0);
 
     sys_slist_append(&widgets, &widget->node);
 
     widget_battery_status_init();
     widget_peripheral_status_init();
-
-    // 初始化定时器（只初始化一次）
-    static bool work_initialized = false;
-    if (!work_initialized) {
-        k_work_init_delayable(&img_switch_work, switch_image);
-        k_work_schedule(&img_switch_work, K_SECONDS(60));
-        work_initialized = true;
-    }
 
     return 0;
 }
