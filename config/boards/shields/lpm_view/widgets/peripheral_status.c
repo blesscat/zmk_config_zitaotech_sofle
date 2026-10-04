@@ -23,7 +23,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 // ==================== 打字貓圖片 ====================
 // 原圖 50x26 取自 englmaxi/zmk-dongle-display (v0.3) 的 bongo_cat_images.c
-// 螢幕為直式安裝，圖已預先逆時針轉 90° 存成 26x50，顯示時剛好正向
+// 2x 放大後左右各裁 14px 成 72x52，再逆時針轉 90° 存成 52x72（直式螢幕用）
 LV_IMG_DECLARE(bongo_idle);
 LV_IMG_DECLARE(bongo_left);
 LV_IMG_DECLARE(bongo_right);
@@ -157,10 +157,10 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     lv_obj_align(top, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     lv_canvas_set_buffer(top, widget->cbuf, CANVAS_SIZE, CANVAS_SIZE, LV_IMG_CF_TRUE_COLOR);
 
-    // --- 打字貓（貼底，水平置中）---
+    // --- 打字貓（2x 大圖貼底，左右置中，超出部分已裁切）---
     lv_obj_t *art = lv_img_create(widget->obj);
     lv_img_set_src(art, &bongo_idle);
-    lv_obj_align(art, LV_ALIGN_TOP_LEFT, 116, 10);
+    lv_obj_align(art, LV_ALIGN_TOP_LEFT, 92, 0);
 
     // --- 貓掌印裝飾（狀態列與貓之間置中）---
     lv_obj_t *deco = lv_img_create(widget->obj);
