@@ -162,10 +162,10 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     lv_img_set_src(art, &bongo_idle);
     lv_obj_align(art, LV_ALIGN_TOP_LEFT, 92, 0);
 
-    // --- 貓掌印裝飾（狀態列與貓之間置中）---
+    // --- 貓掌印裝飾（滿版寬，置中於狀態列與貓之間）---
     lv_obj_t *deco = lv_img_create(widget->obj);
     lv_img_set_src(deco, &paw);
-    lv_obj_align(deco, LV_ALIGN_TOP_LEFT, 42, 11);
+    lv_obj_align(deco, LV_ALIGN_TOP_LEFT, 26, 0);
 
     sys_slist_append(&widgets, &widget->node);
 
