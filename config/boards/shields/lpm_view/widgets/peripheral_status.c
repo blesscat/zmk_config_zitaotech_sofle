@@ -27,6 +27,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 LV_IMG_DECLARE(bongo_idle);
 LV_IMG_DECLARE(bongo_left);
 LV_IMG_DECLARE(bongo_right);
+LV_IMG_DECLARE(paw);
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 
@@ -156,10 +157,15 @@ int zmk_widget_status_init(struct zmk_widget_status *widget, lv_obj_t *parent) {
     lv_obj_align(top, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     lv_canvas_set_buffer(top, widget->cbuf, CANVAS_SIZE, CANVAS_SIZE, LV_IMG_CF_TRUE_COLOR);
 
-    // --- 打字貓（使用者視角置中，避開頂部狀態列）---
+    // --- 打字貓（貼底，水平置中）---
     lv_obj_t *art = lv_img_create(widget->obj);
     lv_img_set_src(art, &bongo_idle);
-    lv_obj_align(art, LV_ALIGN_TOP_LEFT, 59, 10);
+    lv_obj_align(art, LV_ALIGN_TOP_LEFT, 116, 10);
+
+    // --- 貓掌印裝飾（狀態列與貓之間置中）---
+    lv_obj_t *deco = lv_img_create(widget->obj);
+    lv_img_set_src(deco, &paw);
+    lv_obj_align(deco, LV_ALIGN_TOP_LEFT, 42, 11);
 
     sys_slist_append(&widgets, &widget->node);
 
